@@ -16,6 +16,39 @@ series de tiempo.
 - **Más modelos**: compara **seis formas** de pronosticar y te deja elegir con
   cuál pronosticar 1961.
 
+## Gráficos
+
+Los gráficos de la app también quedan guardados como imágenes en la carpeta
+`graficos/` (en PNG y en HTML interactivo). Para regenerarlos:
+
+```bash
+uv run python generar_graficos.py
+```
+
+### 1. La historia
+
+![La historia](graficos/1_la_historia.png)
+
+### 2. La temporada
+
+![La temporada](graficos/2_la_temporada.png)
+
+### 3. El examen
+
+![El examen](graficos/3_el_examen.png)
+
+### 4. El pronóstico
+
+![El pronóstico](graficos/4_el_pronostico.png)
+
+### 5. Más modelos
+
+![Más modelos](graficos/5_mas_modelos.png)
+
+### 6. Pronóstico con el modelo ganador
+
+![Pronóstico con el modelo ganador](graficos/6_pronostico_ganador.png)
+
 ## Los modelos de pronóstico
 
 El **examen** (pestaña 3) compara estas dos formas:
@@ -48,7 +81,7 @@ uv sync
 ```
 
 Esto crea el entorno `.venv` e instala todas las dependencias
-(streamlit, pandas, plotly, statsmodels y prophet).
+(streamlit, pandas, plotly, statsmodels, prophet y kaleido).
 
 ## Cómo ejecutar
 
@@ -69,11 +102,13 @@ Luego abre en tu navegador: **http://127.0.0.1:8501**
 ```
 app.py                      La aplicación (pestañas, gráficos y modelos)
 datos.py                    Carga los datos (internet o archivo local)
+generar_graficos.py         Guarda los gráficos como imágenes en graficos/
 prueba_datos.py             Prueba rápida de los datos
 iniciar_app.bat             Atajo para abrir la app en Windows
 pyproject.toml              Dependencias del proyecto
 .streamlit/config.toml      Configuración (fuerza IPv4 y sin telemetría)
 Datos/airline-passengers.csv  Datos de respaldo (si no hay internet)
+graficos/                   Imágenes PNG y HTML de los gráficos
 ```
 
 ## Los datos

@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "App para pronosticar pasajeros de avión"
 requires-python = ">=3.12"
 dependencies = [
+    "kaleido>=1.5.0",
     "pandas>=3.1.1",
     "plotly>=7.1.0",
     "prophet>=1.5.0",
