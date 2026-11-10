@@ -325,6 +325,18 @@ filas = [
 tabla_modelos = pd.DataFrame(filas).sort_values("Error promedio (%)")
 ganador = tabla_modelos.iloc[0]["Modelo"] if len(tabla_modelos) else "Modelo de temporada (Holt-Winters)"
 
+# Barra: error de cada modelo (más bajo es mejor).
+fig7 = px.bar(
+    tabla_modelos,
+    x="Modelo",
+    y="Error promedio (%)",
+    title="Error promedio de cada modelo (más bajo es mejor)",
+    color="Error promedio (%)",
+    color_continuous_scale="RdYlGn_r",
+)
+fig7.update_layout(xaxis_title="Modelo", yaxis_title="Error promedio (%)")
+guardar(fig7, "7_error_por_modelo")
+
 pronostico5 = MODELOS[ganador](serie_completa, 12)
 fechas_futuras5 = pd.date_range(start="1961-01-01", periods=12, freq="MS")
 

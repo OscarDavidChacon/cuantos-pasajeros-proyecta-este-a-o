@@ -488,6 +488,18 @@ with pestana5:
     st.write("**Error promedio de cada modelo** (más bajo es mejor):")
     st.dataframe(tabla_modelos, width="stretch", hide_index=True)
 
+    # Gráfico de barras: el error de cada modelo (más bajo es mejor).
+    fig5b = px.bar(
+        tabla_modelos,
+        x="Modelo",
+        y="Error promedio (%)",
+        title="Error promedio de cada modelo (más bajo es mejor)",
+        color="Error promedio (%)",
+        color_continuous_scale="RdYlGn_r",
+    )
+    fig5b.update_layout(xaxis_title="Modelo", yaxis_title="Error promedio (%)")
+    st.plotly_chart(fig5b, width="stretch")
+
     if len(tabla_modelos) > 0:
         ganador5 = tabla_modelos.iloc[0]["Modelo"]
         st.success(

@@ -49,6 +49,10 @@ uv run python generar_graficos.py
 
 ![Pronóstico con el modelo ganador](graficos/6_pronostico_ganador.png)
 
+### 7. Error de cada modelo (gráfico de barras)
+
+![Error de cada modelo](graficos/7_error_por_modelo.png)
+
 ## Los modelos de pronóstico
 
 El **examen** (pestaña 3) compara estas dos formas:
