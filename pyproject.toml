@@ -1,0 +1,16 @@
+[project]
+name = "serie-tiempo"
+version = "0.1.0"
+description = "App para pronosticar pasajeros de avión"
+requires-python = ">=3.12"
+dependencies = [
+    "pandas>=3.1.1",
+    "plotly>=7.1.0",
+    "prophet>=1.5.0",
+    "statsmodels>=0.15.0",
+    "streamlit>=1.67.0",
+]
+
+# Con esto, uv NO instala el proyecto como paquete (evita choques con OneDrive).
+[tool.uv]
+package = false

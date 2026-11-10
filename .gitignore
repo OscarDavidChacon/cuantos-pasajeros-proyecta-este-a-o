@@ -1,0 +1,14 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# Datos que no forman parte de la app
+Datos/apple_diario.csv
+Datos/ventas_diarias_olist.csv
