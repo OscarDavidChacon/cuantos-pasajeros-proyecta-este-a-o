@@ -2,37 +2,19 @@
 app.py
 ------
 Aplicación web (hecha con Streamlit) que muestra los pasajeros de avión
-y hace pronósticos sencillos para el próximo año con varios modelos.
+y hace un pronóstico sencillo para el próximo año.
 
 Para abrirla, ejecuta el archivo "iniciar_app.bat".
 """
-
-import logging
-import warnings
 
 import numpy as np
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-import statsmodels.formula.api as smf
 import streamlit as st
 from statsmodels.tsa.holtwinters import ExponentialSmoothing
-from statsmodels.tsa.statespace.sarimax import SARIMAX
 
 from datos import cargar_pasajeros
-
-# Prophet es opcional: si no está instalado, la app sigue funcionando sin él.
-try:
-    from prophet import Prophet
-
-    PROPHET_DISPONIBLE = True
-except Exception:
-    PROPHET_DISPONIBLE = False
-
-# Silenciamos avisos de los modelos (no afectan a los resultados).
-warnings.filterwarnings("ignore")
-logging.getLogger("prophet").setLevel(logging.ERROR)
-logging.getLogger("cmdstanpy").setLevel(logging.ERROR)
 
 # ---------------------------------------------------------------------------
 # CONFIGURACIÓN BÁSICA DE LA PÁGINA
@@ -59,25 +41,12 @@ def obtener_datos() -> pd.DataFrame:
     return cargar_pasajeros()
 
 
-# ===========================================================================
-# LOS MODELOS DE PRONÓSTICO
 # ---------------------------------------------------------------------------
-# Todos reciben:
-#   serie -> los pasajeros ordenados por fecha (con índice de fechas)
-#   pasos -> cuántos meses hay que pronosticar
-# y devuelven una lista de números (los pasajeros esperados).
-# ===========================================================================
-
-def modelo_copiar(serie: pd.Series, pasos: int) -> np.ndarray:
-    """Copia el último año visible: cada mes igual al mismo mes del año pasado."""
-    ultimo_anio = serie.iloc[-12:].to_numpy(dtype=float)
-    repeticiones = int(np.ceil(pasos / 12))
-    return np.tile(ultimo_anio, repeticiones)[:pasos]
-
-
-def modelo_temporada(serie: pd.Series, pasos: int) -> np.ndarray:
+# FUNCIÓN DEL "MODELO DE TEMPORADA" (Holt-Winters)
+# ---------------------------------------------------------------------------
+def pronostico_temporada(serie: pd.Series, pasos: int) -> np.ndarray:
     """
-    Modelo de temporada (Holt-Winters):
+    Pronostica varios meses hacia adelante usando el modelo Holt-Winters:
       - tendencia aditiva (la serie sube poco a poco)
       - temporada multiplicativa (los meses altos crecen en proporción)
       - 12 meses de temporada (un año)
@@ -89,94 +58,8 @@ def modelo_temporada(serie: pd.Series, pasos: int) -> np.ndarray:
         seasonal_periods=12,
         initialization_method="estimated",
     )
-    return modelo.fit().forecast(pasos).to_numpy()
-
-
-def modelo_suavizado(serie: pd.Series, pasos: int) -> np.ndarray:
-    """Suavizamiento exponencial simple (sin tendencia ni temporada)."""
-    modelo = ExponentialSmoothing(
-        serie.astype(float),
-        trend=None,
-        seasonal=None,
-        initialization_method="estimated",
-    )
-    return modelo.fit().forecast(pasos).to_numpy()
-
-
-def modelo_sarima(serie: pd.Series, pasos: int) -> np.ndarray:
-    """SARIMA: modelo clásico para series con tendencia y temporada (modelo 'airline')."""
-    modelo = SARIMAX(
-        serie.astype(float),
-        order=(0, 1, 1),
-        seasonal_order=(0, 1, 1, 12),
-        enforce_stationarity=False,
-        enforce_invertibility=False,
-    )
-    ajuste = modelo.fit(disp=False)
+    ajuste = modelo.fit()
     return ajuste.forecast(pasos).to_numpy()
-
-
-def modelo_regresion(serie: pd.Series, pasos: int) -> np.ndarray:
-    """Regresión lineal: una recta en el tiempo + un ajuste para cada mes del año."""
-    tabla = pd.DataFrame(
-        {
-            "y": serie.to_numpy(dtype=float),
-            "t": np.arange(len(serie)),
-            "mes": serie.index.month.astype(str),
-        }
-    )
-    modelo = smf.ols("y ~ t + C(mes)", data=tabla).fit()
-
-    # Preparamos los meses futuros para predecir.
-    futuro_fechas = pd.date_range(
-        start=serie.index[-1], periods=pasos + 1, freq="MS"
-    )[1:]
-    futuro = pd.DataFrame(
-        {
-            "t": np.arange(len(serie), len(serie) + pasos),
-            "mes": futuro_fechas.month.astype(str),
-        }
-    )
-    return modelo.predict(futuro).to_numpy()
-
-
-def modelo_prophet(serie: pd.Series, pasos: int) -> np.ndarray:
-    """Prophet: modelo de Meta que maneja tendencia y temporada automáticamente."""
-    tabla = pd.DataFrame(
-        {"ds": serie.index, "y": serie.to_numpy(dtype=float)}
-    )
-    modelo = Prophet()
-    # Silenciamos los mensajes internos de Prophet/cmdstanpy durante el ajuste.
-    logging.disable(logging.WARNING)
-    try:
-        modelo.fit(tabla)
-        futuro = modelo.make_future_dataframe(periods=pasos, freq="MS")
-        pronostico = modelo.predict(futuro)
-    finally:
-        logging.disable(logging.NOTSET)
-    return pronostico["yhat"].to_numpy()[-pasos:]
-
-
-# Diccionario con todos los modelos disponibles (el orden es el que se muestra).
-MODELOS = {
-    "Copiar el año pasado": modelo_copiar,
-    "Modelo de temporada (Holt-Winters)": modelo_temporada,
-    "Suavizamiento exponencial": modelo_suavizado,
-    "SARIMA": modelo_sarima,
-    "Regresión lineal": modelo_regresion,
-}
-if PROPHET_DISPONIBLE:
-    MODELOS["Prophet"] = modelo_prophet
-
-# Colores para los gráficos (uno por modelo).
-COLORES = {
-    "Copiar el año pasado": "orange",
-    "Modelo de temporada (Holt-Winters)": "#1f77b4",
-    "Suavizamiento exponencial": "#2ca02c",
-    "SARIMA": "#d62728",
-    "Regresión lineal": "#9467bd",
-    "Prophet": "#8c564b",
-}
 
 
 # ---------------------------------------------------------------------------
@@ -194,12 +77,6 @@ def error_promedio_porcentaje(real: pd.Series, predicho: np.ndarray) -> float:
 # ---------------------------------------------------------------------------
 datos = obtener_datos()
 
-# Serie con índice de fechas, que usan los modelos.
-serie_completa = pd.Series(
-    datos["Passengers"].to_numpy(dtype=float),
-    index=pd.DatetimeIndex(datos["Month"]),
-)
-
 # ---------------------------------------------------------------------------
 # TÍTULO
 # ---------------------------------------------------------------------------
@@ -209,8 +86,11 @@ st.caption("Datos mensuales de pasajeros de avión entre 1949 y 1960.")
 # ---------------------------------------------------------------------------
 # 3 INDICADORES DE ARRIBA
 # ---------------------------------------------------------------------------
+# Total de pasajeros en cada año.
 total_1949 = datos.loc[datos["Month"].dt.year == 1949, "Passengers"].sum()
 total_1960 = datos.loc[datos["Month"].dt.year == 1960, "Passengers"].sum()
+
+# Cuántas veces creció 1960 respecto a 1949.
 veces_crecio = total_1960 / total_1949
 
 col1, col2, col3 = st.columns(3)
@@ -256,6 +136,7 @@ with pestana1:
 with pestana2:
     st.subheader("La temporada: qué meses son los más fuertes")
 
+    # Promedio de pasajeros para cada mes del año (enero a diciembre).
     datos_temp = datos.copy()
     datos_temp["Mes"] = datos_temp["Month"].dt.month
     promedio_mes = (
@@ -273,6 +154,7 @@ with pestana2:
         title="Promedio de pasajeros por mes del año",
     )
     fig2.update_traces(marker_color="#1f77b4")
+    # Línea del "mes normal" para comparar.
     fig2.add_hline(
         y=mes_normal,
         line_dash="dash",
@@ -292,84 +174,88 @@ with pestana2:
 # PESTAÑA 3: EL EXAMEN
 # ===========================================================================
 with pestana3:
-    st.subheader("El examen: comparamos varios modelos")
+    st.subheader("El examen: probamos dos formas de pronosticar")
 
     st.write(
-        "Escondemos los últimos **24 meses** y pedimos a cada modelo que los "
-        "adivine. Así vemos cuál se equivoca menos."
+        "Escondemos los últimos **24 meses** y tratamos de adivinarlos. "
+        "Así comprobamos qué forma de pronosticar se equivoca menos."
     )
 
-    # Entrenamiento (todo menos los últimos 24) y prueba (los 24 escondidos).
+    # Separamos: entrenamiento (todo menos los últimos 24) y prueba (los 24 escondidos).
     train = datos.iloc[:-24].reset_index(drop=True)
     test = datos.iloc[-24:].reset_index(drop=True)
+
+    # --- Forma 1: "Copiar el año pasado" -----------------------------------
+    # Tomamos el último año visible y repetimos sus valores.
+    ultimo_anio_visible = train.iloc[-12:]
+    valor_por_mes = dict(
+        zip(ultimo_anio_visible["Month"].dt.month, ultimo_anio_visible["Passengers"])
+    )
+    copiar = test["Month"].dt.month.map(valor_por_mes).to_numpy()
+
+    # --- Forma 2: "Modelo de temporada" (Holt-Winters) ----------------------
     serie_train = pd.Series(
         train["Passengers"].to_numpy(dtype=float),
         index=pd.DatetimeIndex(train["Month"]),
     )
+    modelo_pred = pronostico_temporada(serie_train, pasos=len(test))
 
-    # Calculamos el pronóstico de cada modelo.
-    pronosticos = {}
-    for nombre, funcion in MODELOS.items():
-        try:
-            pronosticos[nombre] = funcion(serie_train, len(test))
-        except Exception as error:
-            st.warning(f"No se pudo usar el modelo «{nombre}»: {error}")
+    # --- Errores promedio ---------------------------------------------------
+    error_copiar = error_promedio_porcentaje(test["Passengers"], copiar)
+    error_modelo = error_promedio_porcentaje(test["Passengers"], modelo_pred)
 
-    # --- Gráfico: real vs cada modelo --------------------------------------
+    # --- Gráfico: real vs las dos formas -----------------------------------
     fig3 = go.Figure()
     fig3.add_trace(go.Scatter(
         x=test["Month"], y=test["Passengers"],
         name="Real (lo que pasó)", mode="lines+markers",
         line=dict(color="black", width=3),
     ))
-    for nombre, pred in pronosticos.items():
-        fig3.add_trace(go.Scatter(
-            x=test["Month"], y=pred,
-            name=nombre, mode="lines+markers",
-            line=dict(color=COLORES.get(nombre, "gray"), dash="dash"),
-        ))
+    fig3.add_trace(go.Scatter(
+        x=test["Month"], y=copiar,
+        name="Copiar el año pasado", mode="lines+markers",
+        line=dict(color="orange", dash="dash"),
+    ))
+    fig3.add_trace(go.Scatter(
+        x=test["Month"], y=modelo_pred,
+        name="Modelo de temporada", mode="lines+markers",
+        line=dict(color="#1f77b4", dash="dash"),
+    ))
     fig3.update_layout(
-        title="Últimos 24 meses: lo real frente a cada modelo",
+        title="Últimos 24 meses: lo real frente a los dos pronósticos",
         xaxis_title="Año",
         yaxis_title="Pasajeros",
         hovermode="x unified",
     )
     st.plotly_chart(fig3, width="stretch")
 
-    # --- Tabla de errores (ordenada: el mejor arriba) ----------------------
-    filas = [
+    # --- Tabla de errores ---------------------------------------------------
+    tabla_errores = pd.DataFrame(
         {
-            "Modelo": nombre,
-            "Error promedio (%)": round(
-                error_promedio_porcentaje(test["Passengers"], pred), 1
-            ),
+            "Forma de pronosticar": ["Copiar el año pasado", "Modelo de temporada"],
+            "Error promedio (%)": [round(error_copiar, 1), round(error_modelo, 1)],
         }
-        for nombre, pred in pronosticos.items()
-    ]
-    tabla_errores = (
-        pd.DataFrame(filas)
-        .sort_values("Error promedio (%)")
-        .reset_index(drop=True)
     )
-    st.write("**Error promedio de cada modelo** (más bajo es mejor):")
+    st.write("**Error promedio de cada forma** (más bajo es mejor):")
     st.dataframe(tabla_errores, width="stretch", hide_index=True)
 
     # --- Cuál ganó ----------------------------------------------------------
-    if len(tabla_errores) > 0:
-        ganador = tabla_errores.iloc[0]["Modelo"]
-        error_ganador = tabla_errores.iloc[0]["Error promedio (%)"]
+    if error_modelo < error_copiar:
         st.success(
-            f"🏆 Ganó **{ganador}**, con un error promedio de {error_ganador:.1f}%. "
-            "Es el modelo en el que más podemos confiar para este conjunto de datos."
+            f"🏆 Ganó el **Modelo de temporada**, con un error promedio de "
+            f"{error_modelo:.1f}%, frente al {error_copiar:.1f}% de copiar el año pasado."
         )
     else:
-        ganador = "Modelo de temporada (Holt-Winters)"
+        st.success(
+            f"🏆 Ganó **Copiar el año pasado**, con un error promedio de "
+            f"{error_copiar:.1f}%, frente al {error_modelo:.1f}% del modelo de temporada."
+        )
 
     st.info(
-        "Comparamos lo que de verdad pasó (línea negra) con lo que dijo cada "
-        "modelo. El número de la tabla dice, en promedio, cuánto se equivocó cada "
-        "uno en porcentaje: cuanto más bajo, mejor. El que queda arriba es el más "
-        "confiable."
+        "Comparamos lo que de verdad pasó (línea negra) con las dos formas de "
+        "pronosticar. El número de la tabla dice, en promedio, cuánto se equivocó "
+        "cada una en porcentaje. Cuanto más bajo, mejor: esa es la forma en la que "
+        "más podemos confiar."
     )
 
 # ===========================================================================
@@ -378,25 +264,12 @@ with pestana3:
 with pestana4:
     st.subheader("El pronóstico: los 12 meses de 1961")
 
-    st.write(
-        "Elige el modelo que quieres usar. Por defecto dejamos el que ganó el examen."
+    # Usamos el Modelo de temporada con TODOS los datos para mirar hacia adelante.
+    serie_completa = pd.Series(
+        datos["Passengers"].to_numpy(dtype=float),
+        index=pd.DatetimeIndex(datos["Month"]),
     )
-
-    # El modelo por defecto es el que ganó el examen de la pestaña anterior.
-    opciones = list(MODELOS.keys())
-    if ganador in opciones:
-        indice_inicial = opciones.index(ganador)
-    else:
-        indice_inicial = opciones.index("Modelo de temporada (Holt-Winters)")
-
-    modelo_elegido = st.selectbox(
-        "¿Qué modelo quieres usar para el pronóstico?",
-        opciones,
-        index=indice_inicial,
-    )
-
-    # Pronóstico de los 12 meses de 1961.
-    pronostico = MODELOS[modelo_elegido](serie_completa, 12)
+    pronostico = pronostico_temporada(serie_completa, pasos=12)
     fechas_futuras = pd.date_range(start="1961-01-01", periods=12, freq="MS")
 
     # --- Gráfico: historia + pronóstico ------------------------------------
@@ -408,8 +281,8 @@ with pestana4:
     ))
     fig4.add_trace(go.Scatter(
         x=fechas_futuras, y=pronostico,
-        name=f"Pronóstico ({modelo_elegido})", mode="lines+markers",
-        line=dict(color=COLORES.get(modelo_elegido, "#1f77b4"), width=3),
+        name="Pronóstico 1961", mode="lines+markers",
+        line=dict(color="#1f77b4", width=3),
     ))
     fig4.update_layout(
         title="Pronóstico de pasajeros para 1961",
@@ -429,13 +302,12 @@ with pestana4:
     st.write("**Pasajeros esperados, mes a mes:**")
     st.dataframe(tabla_pronostico, width="stretch", hide_index=True)
 
-    st.metric(
-        f"Total esperado en 1961 ({modelo_elegido})",
-        f"{int(round(pronostico.sum())):,.0f}",
-    )
+    total_1961 = int(round(pronostico.sum()))
+    st.metric("Total esperado en 1961", f"{total_1961:,.0f}")
 
     st.info(
-        "Este es el pronóstico de los 12 meses de 1961 usando el modelo que "
-        "elegiste arriba. Se espera que el negocio siga creciendo y que se repita "
-        "el patrón de siempre: meses fuertes en verano y meses flojos a final de año."
+        "Esta es la mejor estimación para el próximo año, usando el Modelo de "
+        "temporada con todos los datos. Se espera que el negocio siga creciendo y "
+        "que se repita el patrón de siempre: meses fuertes en verano y meses flojos "
+        "a final de año."
     )
