@@ -13,13 +13,26 @@ series de tiempo.
   para ver cuál se equivoca menos.
 - **El pronóstico**: pronostica los 12 meses de **1961** con el Modelo de
   temporada (Holt-Winters).
+- **Más modelos**: compara **seis formas** de pronosticar y te deja elegir con
+  cuál pronosticar 1961.
 
-## Las dos formas de pronosticar
+## Los modelos de pronóstico
+
+El **examen** (pestaña 3) compara estas dos formas:
 
 | Forma | Descripción |
 |---|---|
 | Copiar el año pasado | Cada mes igual al mismo mes del último año visible |
 | Modelo de temporada (Holt-Winters) | Tendencia aditiva + temporada multiplicativa (12 meses) |
+
+La pestaña **Más modelos** añade cuatro modelos más:
+
+| Modelo | Descripción |
+|---|---|
+| Suavizamiento exponencial | Promedio con más peso a lo reciente (sin temporada) |
+| SARIMA | Modelo clásico con tendencia y temporada |
+| Regresión lineal | Recta en el tiempo + ajuste por mes |
+| Prophet | Modelo de Meta que maneja tendencia y temporada solo |
 
 ## Requisitos
 
@@ -35,7 +48,7 @@ uv sync
 ```
 
 Esto crea el entorno `.venv` e instala todas las dependencias
-(streamlit, pandas, plotly y statsmodels).
+(streamlit, pandas, plotly, statsmodels y prophet).
 
 ## Cómo ejecutar
 
